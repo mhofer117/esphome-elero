@@ -457,6 +457,18 @@ void Elero::interpret_msg() {
     if(search != this->address_to_cover_mapping_.end()) {
       search->second->set_rx_state(payload[6]);
     }
+  } else { // commands from other remotes
+    auto search1 = this->address_to_cover_mapping_.find(src);
+    if(search1 != this->address_to_cover_mapping_.end()) {
+      search1->second->sync_remote_command(payload[2]);
+    } else {
+      auto search2 = this->channel_to_covers_mapping_.find(chl);
+      if(search2 != this->channel_to_covers_mapping_.end()) {
+        for (EleroCover* cover : search2->second) {
+          cover->sync_remote_command(payload[2]);
+        }
+      }
+    }
   }
 }
 
@@ -468,6 +480,15 @@ void Elero::register_cover(EleroCover *cover) {
   }
   this->address_to_cover_mapping_.insert({address, cover});
   cover->set_poll_offset((this->address_to_cover_mapping_.size() - 1) * 5000);
+
+  // create map of channel to covers
+  uint8_t channel = cover->get_channel();
+  auto search = this->channel_to_covers_mapping_.find(channel);
+  if(search != this->channel_to_covers_mapping_.end()) {
+      search->second.push_back(cover);
+  } else {
+    this->channel_to_covers_mapping_.insert({channel, {cover}});
+  }
 }
 
 bool Elero::send_command(t_elero_command *cmd) {

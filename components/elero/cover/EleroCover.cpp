@@ -167,7 +167,57 @@ void EleroCover::set_rx_state(uint8_t state) {
     this->position = pos;
     this->tilt = current_tilt;
     this->current_operation = op;
+    if (op != COVER_OPERATION_IDLE) {
+      this->last_operation_ = op;
+    }
     this->publish_state();
+  }
+}
+
+void EleroCover::sync_remote_command(uint8_t command) {
+  ESP_LOGV(TAG, "Got command: 0x%02x for blind 0x%02x", command, this->command_.blind_addr);
+  float target_position = this->target_position_;
+  float target_tilt = this->target_tilt_;
+  CoverOperation op = this->current_operation;
+
+  switch(command) {
+  case ELERO_COMMAND_COVER_STOP:
+  case ELERO_COMMAND_COVER_CHECK:
+    op = COVER_OPERATION_IDLE;
+    target_position = this->position;
+    target_tilt = this->tilt;
+    break;
+  case ELERO_COMMAND_COVER_UP:
+  case ELERO_COMMAND_COVER_UP2:
+  case ELERO_COMMAND_COVER_TILT:
+    op = COVER_OPERATION_OPENING;
+    target_position = COVER_OPEN;
+    target_tilt = TILT_OPEN;
+    break;
+  case ELERO_COMMAND_COVER_DOWN:
+  case ELERO_COMMAND_COVER_DOWN2:
+  case ELERO_COMMAND_COVER_DOWN_TILT:
+    op = COVER_OPERATION_CLOSING;
+    target_position = COVER_CLOSED;
+    target_tilt = TILT_CLOSED;
+  case ELERO_COMMAND_COVER_CONTROL:
+  default:
+    // do nothing, keep current state
+    break;
+  }
+
+  if((op != this->current_operation) || (target_position != this->target_position_) || (target_tilt != this->target_tilt_)) {
+    this->target_position_ = target_position;
+    this->target_tilt_ = target_tilt;
+    if (op != COVER_OPERATION_IDLE && op != this->current_operation) {
+      this->last_operation_ = op;
+      this->movement_start_ = millis();
+      this->last_poll_ = millis();
+      this->last_recompute_time_ = millis();
+    }
+    this->current_operation = op;
+    this->publish_state();
+    this->last_publish_ = millis();
   }
 }
 
