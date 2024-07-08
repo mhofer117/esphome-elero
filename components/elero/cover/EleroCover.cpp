@@ -38,7 +38,7 @@ void EleroCover::loop() {
       intvl = ELERO_POLL_INTERVAL_MOVING;
   }
 
-  if((now > this->poll_offset_) && (now - this->poll_offset_ - this->last_poll_) > intvl) {
+  if((now > this->poll_offset_) && now > this->last_poll_ + this->poll_offset_ + intvl) {
     ESP_LOGV(TAG, "'%s': Polling blind", this->name_.c_str());
     this->commands_to_send_.push(this->command_check_);
     this->last_poll_ = now - this->poll_offset_;
