@@ -46,7 +46,7 @@ void EleroCover::loop() {
 
   this->handle_commands(now);
 
-  if((this->current_operation != COVER_OPERATION_IDLE) && (((this->open_duration_ > 0) && (this->close_duration_ > 0)) || (this->tilt_open_duration_ > 0) && (this->tilt_close_duration_ > 0))) {
+  if((this->current_operation != COVER_OPERATION_IDLE) && (((this->open_duration_ > 0) && (this->close_duration_ > 0)) || ((this->tilt_open_duration_ > 0) && (this->tilt_close_duration_ > 0)))) {
     this->recompute_position();
     if(this->is_at_target()) {
       // We don't want to send a stop command for completely open or close,
@@ -55,6 +55,8 @@ void EleroCover::loop() {
           !(this->target_position_ == COVER_CLOSED && this->target_tilt_ == TILT_CLOSED)) {
         ESP_LOGV(TAG, "'%s': Target position reached, sending STOP command", this->name_.c_str());
         this->commands_to_send_.push(this->command_stop_);
+      } else {
+        ESP_LOGV(TAG, "'%s': Target position reached, no need to send STOP command", this->name_.c_str());
       }
       this->current_operation = COVER_OPERATION_IDLE;
       this->publish_state();
@@ -130,12 +132,18 @@ void EleroCover::set_rx_state(uint8_t state) {
 
   switch(state) {
   case ELERO_STATE_TOP:
-    pos = COVER_OPEN;
-    current_tilt = TILT_OPEN;
+    // prevent race-condition
+    if (op != COVER_OPERATION_CLOSING) {
+      pos = COVER_OPEN;
+      current_tilt = TILT_OPEN;
+    }
     break;
   case ELERO_STATE_BOTTOM:
-    pos = COVER_CLOSED;
-    current_tilt = TILT_CLOSED;
+    // prevent race-condition
+    if (op != COVER_OPERATION_OPENING) {
+      pos = COVER_CLOSED;
+      current_tilt = TILT_CLOSED;
+    }
     break;
   case ELERO_STATE_START_MOVING_UP:
   case ELERO_STATE_MOVING_UP:
@@ -190,16 +198,22 @@ void EleroCover::sync_remote_command(uint8_t command) {
   case ELERO_COMMAND_COVER_UP:
   case ELERO_COMMAND_COVER_UP2:
   case ELERO_COMMAND_COVER_TILT:
-    op = COVER_OPERATION_OPENING;
-    target_position = COVER_OPEN;
-    target_tilt = TILT_OPEN;
+    // prevent race-condition
+    if (op != COVER_OPERATION_OPENING) {
+      op = COVER_OPERATION_OPENING;
+      target_position = COVER_OPEN;
+      target_tilt = TILT_OPEN;
+    }
     break;
   case ELERO_COMMAND_COVER_DOWN:
   case ELERO_COMMAND_COVER_DOWN2:
   case ELERO_COMMAND_COVER_DOWN_TILT:
-    op = COVER_OPERATION_CLOSING;
-    target_position = COVER_CLOSED;
-    target_tilt = TILT_CLOSED;
+    // prevent race-condition
+    if (op != COVER_OPERATION_CLOSING) {
+      op = COVER_OPERATION_CLOSING;
+      target_position = COVER_CLOSED;
+      target_tilt = TILT_CLOSED;
+    }
   case ELERO_COMMAND_COVER_CONTROL:
   default:
     // do nothing, keep current state
@@ -242,6 +256,7 @@ void EleroCover::control(const cover::CoverCall &call) {
       this->target_tilt_ = TILT_CLOSED;
       this->start_movement(COVER_OPERATION_CLOSING);
     }
+    ESP_LOGV(TAG, "'%s': (set_pos) set target_position: %2.1f, target_tilt: %2.1f", this->name_.c_str(), this->target_position_, this->target_tilt_);
   }
   if (call.get_tilt().has_value()) {
     auto tilt = *call.get_tilt();
@@ -254,6 +269,7 @@ void EleroCover::control(const cover::CoverCall &call) {
     } else {
       ESP_LOGD(TAG, "'%s': Tilt already set", this->name_.c_str());
     }
+    ESP_LOGV(TAG, "'%s': (set_tilt) set target_position: %2.1f, target_tilt: %2.1f", this->name_.c_str(), this->target_position_, this->target_tilt_);
   }
   if (call.get_toggle().has_value()) {
     if(this->current_operation != COVER_OPERATION_IDLE) {
@@ -268,6 +284,7 @@ void EleroCover::control(const cover::CoverCall &call) {
         this->target_tilt_ = TILT_CLOSED;
         this->start_movement(COVER_OPERATION_CLOSING);
       }
+      ESP_LOGD(TAG, "'%s': (toggle) set target_position: %2.1f, target_tilt: %2.1f", this->name_.c_str(), this->target_position_, this->target_tilt_);
     }
   }
 }
@@ -315,24 +332,38 @@ void EleroCover::recompute_position() {
   switch (this->current_operation) {
     case COVER_OPERATION_OPENING:
       dir = 1.0f;
-      action_dur = this->open_duration_;
-      tilt_dur = this->tilt_open_duration_;
+      if (this->tilt_open_duration_ > 0 && this->tilt < TILT_OPEN) {
+        // we are still tilting, do not consider the action duration for opening
+        action_dur = 0;
+        tilt_dur = this->tilt_open_duration_;
+      } else {
+        // no more tilting to re-calculate, we are now opening
+        action_dur = this->open_duration_ - this->tilt_open_duration_;
+        tilt_dur = 0;
+      }
       break;
     case COVER_OPERATION_CLOSING:
       dir = -1.0f;
-      action_dur = this->close_duration_;
-      tilt_dur = this->tilt_close_duration_;
+      if (this->tilt_close_duration_ > 0 && this->tilt > TILT_CLOSED) {
+        // we are still tilting, do not consider the action duration for closing
+        action_dur = 0;
+        tilt_dur = this->tilt_close_duration_;
+      } else {
+        // no more tilting to re-calculate, we are now closing
+        action_dur = this->close_duration_ - this->tilt_close_duration_;
+        tilt_dur = 0;
+      }
       break;
     default:
       return;
   }
 
   const uint32_t now = millis();
-  if (action_dur > 0 ) {
+  if (action_dur > 0) {
     this->position += dir * (now - this->last_recompute_time_) / action_dur;
     this->position = clamp(this->position, 0.0f, 1.0f);
   }
-  if (tilt_dur > 0 ) {
+  if (tilt_dur > 0) {
     this->tilt += dir * (now - this->last_recompute_time_) / tilt_dur;
     this->tilt = clamp(this->tilt, 0.0f, 1.0f);
   }
