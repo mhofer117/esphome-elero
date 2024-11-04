@@ -48,7 +48,8 @@ class EleroCover : public cover::Cover, public Component {
   void handle_commands(uint32_t now);
   void recompute_position();
   void start_movement(cover::CoverOperation op);
-  bool is_at_target();
+  bool is_at_target_position();
+  bool is_at_target_tilt();
   
  protected:
   void control(const cover::CoverCall &call) override;

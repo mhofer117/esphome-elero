@@ -48,7 +48,7 @@ void EleroCover::loop() {
 
   if((this->current_operation != COVER_OPERATION_IDLE) && (((this->open_duration_ > 0) && (this->close_duration_ > 0)) || ((this->tilt_open_duration_ > 0) && (this->tilt_close_duration_ > 0)))) {
     this->recompute_position();
-    if(this->is_at_target()) {
+    if(this->is_at_target_position() && this->is_at_target_tilt()) {
       // We don't want to send a stop command for completely open or close,
       // this is handled by the cover
       if( !(this->target_position_ == COVER_OPEN && this->target_tilt_ == TILT_OPEN) &&
@@ -71,12 +71,24 @@ void EleroCover::loop() {
   }
 }
 
-bool EleroCover::is_at_target() {
+bool EleroCover::is_at_target_position() {
   switch (this->current_operation) {
     case COVER_OPERATION_OPENING:
-      return (this->position >= this->target_position_) && (this->tilt >= this->target_tilt_);
+      return this->position >= this->target_position_;
     case COVER_OPERATION_CLOSING:
-      return (this->position <= this->target_position_) && (this->tilt <= this->target_tilt_);
+      return this->position <= this->target_position_;
+    case COVER_OPERATION_IDLE:
+    default:
+      return true;
+  }
+}
+
+bool EleroCover::is_at_target_tilt() {
+  switch (this->current_operation) {
+    case COVER_OPERATION_OPENING:
+      return !this->supports_tilt_ || this->tilt >= this->target_tilt_;
+    case COVER_OPERATION_CLOSING:
+      return !this->supports_tilt_ || this->tilt <= this->target_tilt_;
     case COVER_OPERATION_IDLE:
     default:
       return true;
@@ -197,7 +209,7 @@ void EleroCover::sync_remote_command(uint8_t command) {
     break;
   case ELERO_COMMAND_COVER_UP:
   case ELERO_COMMAND_COVER_UP2:
-  case ELERO_COMMAND_COVER_TILT:
+  case ELERO_COMMAND_COVER_TOP_TILT:
     // prevent race-condition
     if (op != COVER_OPERATION_OPENING) {
       op = COVER_OPERATION_OPENING;
@@ -207,7 +219,7 @@ void EleroCover::sync_remote_command(uint8_t command) {
     break;
   case ELERO_COMMAND_COVER_DOWN:
   case ELERO_COMMAND_COVER_DOWN2:
-  case ELERO_COMMAND_COVER_DOWN_TILT:
+  case EELERO_COMMAND_COVER_BOTTOM_TILT:
     // prevent race-condition
     if (op != COVER_OPERATION_CLOSING) {
       op = COVER_OPERATION_CLOSING;
