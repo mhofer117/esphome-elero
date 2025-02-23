@@ -20,7 +20,7 @@ static const uint8_t ELERO_COMMAND_COVER_UP2 = 0x21;
 static const uint8_t ELERO_COMMAND_COVER_TOP_TILT = 0x24;
 static const uint8_t ELERO_COMMAND_COVER_DOWN = 0x40;
 static const uint8_t ELERO_COMMAND_COVER_DOWN2 = 0x41;
-static const uint8_t EELERO_COMMAND_COVER_BOTTOM_TILT = 0x44;
+static const uint8_t ELERO_COMMAND_COVER_BOTTOM_TILT = 0x44;
 
 static const uint8_t ELERO_STATE_UNKNOWN = 0x00;
 static const uint8_t ELERO_STATE_TOP = 0x01;
@@ -89,6 +89,8 @@ class Elero : public spi::SPIDevice<spi::BIT_ORDER_MSB_FIRST, spi::CLOCK_POLARIT
   void interpret_msg();
   void register_cover(EleroCover *cover);
   bool send_command(t_elero_command *cmd);
+
+  std::string get_command_name(uint8_t code);
   
   void set_gdo0_pin(InternalGPIOPin *pin) { gdo0_pin_ = pin; }
   void set_freq0(uint8_t freq) { freq0_ = freq; }

@@ -195,7 +195,7 @@ void EleroCover::set_rx_state(uint8_t state) {
 }
 
 void EleroCover::sync_remote_command(uint8_t command) {
-  ESP_LOGV(TAG, "Got command: 0x%02x for blind 0x%02x", command, this->command_.blind_addr);
+  ESP_LOGV(TAG, "Got command: %s (0x%02x) for blind %s (0x%02x)", this->parent_->get_command_name(command).c_str(), command, this->name_.c_str(), this->command_.blind_addr);
   float target_position = this->target_position_;
   float target_tilt = this->target_tilt_;
   CoverOperation op = this->current_operation;
@@ -219,7 +219,7 @@ void EleroCover::sync_remote_command(uint8_t command) {
     break;
   case ELERO_COMMAND_COVER_DOWN:
   case ELERO_COMMAND_COVER_DOWN2:
-  case EELERO_COMMAND_COVER_BOTTOM_TILT:
+  case ELERO_COMMAND_COVER_BOTTOM_TILT:
     // prevent race-condition
     if (op != COVER_OPERATION_CLOSING) {
       op = COVER_OPERATION_CLOSING;
