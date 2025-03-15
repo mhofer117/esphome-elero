@@ -1,3 +1,7 @@
+# Looking for a new maintainer
+
+This project is looking for a new maintainer. After having invested way too much time in remote-controlling my blinds, I was finally able to run proper cables to all of them and to implement a centralised control system. The code for driving wired blinds, especially the RolTop-J series, is available [here](https://github.com/andyboeh/esphome-elero_wired).
+
 # Elero Remote Control Component for ESPHome
 
 This project is heavily based on the work of two other people:
@@ -9,7 +13,7 @@ This project is heavily based on the work of two other people:
 
 Ultimately, this component should allow you to control Elero blinds with the
 bidirectional protocol directly from Home Assistant using an ESP32 with a CC1101
-module attached. Apart from SPI (MISO, MOSI, SCK, CS) only GDO0 is required (in contrast to the other projects, GDO1 is not needed - it's not available on my module so I configured the CC1101 a bit differently).
+module attached. Apart from SPI (MISO, MOSI, SCK, CS) only GDO0 is required (in contrast to the other projects, GDO2 is not needed - it's not available on my module so I configured the CC1101 a bit differently).
 
 The current code can transmit and simulate the TempoTel 2 that I have. Since some values are different to the two projects mentioned above, I'm not sure which/if this has an impact. For this reason, various aspects of the protocol can be configured on a per-cover basis (see the respective section).
 
